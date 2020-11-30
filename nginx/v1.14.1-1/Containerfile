@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+IMAGE_NAME=$1
+
+containerID=$(buildah from registry.access.redhat.com/ubi8/ubi-minimal)
+
+trap "buildah rm $containerID" EXIT
+
+buildah run "$containerID" -- microdnf install nginx-1.14.1 -y
+buildah run "$containerID" -- microdnf clean all -y
+
+buildah run "$containerID" -- sed -i "s#user nginx;##g" /etc/nginx/nginx.conf
+buildah run "$containerID" -- sed -i "s#/var/log/nginx/access.log#/dev/stdout#g" /etc/nginx/nginx.conf
+buildah run "$containerID" -- sed -i "s#/var/log/nginx/error.log#/dev/stderr#g" /etc/nginx/nginx.conf
+buildah run "$containerID" -- sed -i "s#80#8080#g" /etc/nginx/nginx.conf
+buildah run "$containerID" -- touch /run/nginx.pid
+buildah run "$containerID" -- chown -R 998:0 /run/nginx.pid
+buildah run "$containerID" -- chmod -R g=u /run/nginx.pid
+
+buildah config --workingdir="/usr/share/nginx/html" "$containerID"
+buildah config --user 1001 "$containerID"
+buildah config --port 8080 "$containerID"
+buildah config --entrypoint '["nginx", "-g", "daemon off;"]' "$containerID"
+buildah config --cmd '' "$containerID"
+
+buildah config --stop-signal SIGTERM "$containerID"
+
+buildah commit "$containerID" "${IMAGE_NAME}"
