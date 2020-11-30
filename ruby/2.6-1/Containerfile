@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+IMAGE_NAME=$1
+
+containerID=$(buildah from registry.access.redhat.com/ubi7/ubi-minimal)
+
+trap "buildah rm $containerID" EXIT
+
+# https://www.softwarecollections.org/en/scls/rhscl/rh-ruby26/
+buildah run "$containerID" -- microdnf install rh-ruby26 -y
+buildah run "$containerID" -- microdnf clean all -y
+
+buildah commit "$containerID" "${IMAGE_NAME}"
