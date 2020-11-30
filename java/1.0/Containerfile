@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+IMAGE_NAME=$1
+
+containerID=$(buildah from registry.access.redhat.com/ubi8/ubi-minimal)
+
+trap "buildah rm $containerID" EXIT
+
+buildah run "$containerID" microdnf install java-1.8.0-openjdk --nodocs -y
+buildah run "$containerID" microdnf clean all -y
+
+buildah commit "$containerID" "${IMAGE_NAME}"
