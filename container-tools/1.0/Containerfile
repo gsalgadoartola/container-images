@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+IMAGE_NAME=$1
+
+containerID=$(buildah from centos:8)
+
+trap "buildah rm $containerID" EXIT
+
+buildah config --env _BUILDAH_STARTED_IN_USERNS="" "$containerID"
+buildah config --env BUILDAH_ISOLATION=chroot "$containerID"
+
+buildah run "$containerID" -- yum update -y
+buildah run "$containerID" -- yum install git buildah skopeo -y
+buildah run "$containerID" -- yum clean all -y
+
+buildah config --workingdir="/home/jenkins" "$containerID"
+
+buildah commit "$containerID" "${IMAGE_NAME}"
