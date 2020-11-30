@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+APP_HOME=/opt/app-root
+BASE_IMAGE=$1
+IMAGE_NAME=$2
+
+containerID=$(buildah from ${BASE_IMAGE})
+
+trap "buildah rm $containerID" EXIT
+
+#buildah run "$containerID" -- microdnf install rh-ruby26-ruby-devel gcc-c++ gcc git zlib-devel make patch redhat-rpm-config tar postgresql-devel -y
+buildah run "$containerID" -- microdnf install gcc-c++ gcc git tar postgresql-devel -y
+buildah run "$containerID" -- microdnf clean all -y
+
+buildah run "$containerID" -- mkdir ${APP_HOME}
+
+buildah config --env 'HOME=/home/jenkins' "$containerID"
+buildah config --env 'PATH=/opt/rh/rh-ruby26/root/usr/local/bin:/opt/rh/rh-ruby26/root/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' "$containerID"
+buildah config --env 'LD_LIBRARY_PATH=/opt/rh/rh-ruby26/root/usr/local/lib64:/opt/rh/rh-ruby26/root/usr/lib64' "$containerID"
+buildah config --env 'MANPATH=/opt/rh/rh-ruby26/root/usr/local/share/man:/opt/rh/rh-ruby26/root/usr/share/man' "$containerID"
+buildah config --env 'PKG_CONFIG_PATH=/opt/rh/rh-ruby26/root/usr/local/lib64/pkgconfig:/opt/rh/rh-ruby26/root/usr/lib64/pkgconfig' "$containerID"
+buildah config --env 'XDG_DATA_DIRS=/opt/rh/rh-ruby26/root/usr/local/share:/opt/rh/rh-ruby26/root/usr/share' "$containerID"
+
+buildah config --env HOME=${APP_HOME} "$containerID"
+buildah config --env RAILS_LOG_TO_STDOUT=1 "$containerID"
+buildah config --env RAILS_ENV=production "$containerID"
+
+buildah copy "$containerID" ./ ${APP_HOME}
+
+buildah config --workingdir="${APP_HOME}" "$containerID"
+
+buildah run "$containerID" -- gem install bundler -v 1.17.2
+buildah run "$containerID" -- bundle config set deployment "true"
+buildah run "$containerID" -- bundle config set without "development test"
+buildah run "$containerID" -- bundle install --jobs=4 --retry=3 --path vendor/cache
+buildah run "$containerID" -- bundle exec rake assets:precompile
+buildah run "$containerID" -- mkdir -p tmp/pids
+
+buildah run "$containerID" -- chown -R 1001:0 ${APP_HOME}
+buildah run "$containerID" -- chmod -R g=u ${APP_HOME}
+
+#buildah run "$containerID" -- microdnf remove rh-ruby26-ruby-devel zlib-devel make patch redhat-rpm-config postgresql-devel -y
+#buildah run "$containerID" -- microdnf clean all -y
+
+buildah config --user 1001 "$containerID"
+buildah config --port 3000 "$containerID"
+buildah config --entrypoint '["./run.sh"]' "$containerID"
+
+buildah commit "$containerID" "${IMAGE_NAME}"
