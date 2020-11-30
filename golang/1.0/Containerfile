@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+IMAGE_NAME=$1
+
+containerID=$(buildah from registry.access.redhat.com/ubi8/ubi-minimal)
+
+trap "buildah rm $containerID" EXIT
+
+buildah run "$containerID" -- microdnf install go-toolset-1.12.12 -y
+buildah run "$containerID" -- microdnf clean all -y
+buildah run "$containerID" -- mkdir -p /home/jenkins
+buildah run "$containerID" -- echo 'export GOPATH=/home/jenkins' >> $HOME/.bashrc
+
+buildah config --workingdir="/home/jenkins" "$containerID"
+
+buildah commit "$containerID" "${IMAGE_NAME}"
