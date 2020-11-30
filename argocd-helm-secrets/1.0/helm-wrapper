@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+if [[ "$1" == "template" ]]; then
+	vault write auth/kubernetes/login role=argocd jwt=${VAULT_JWT} > /dev/null 2>&1
+	export VAULT_TOKEN=$(vault write auth/kubernetes/login role=argocd jwt=${VAULT_JWT} | grep -m 1 token | awk '{print $2}')
+	exec _helm secrets "$@"
+else
+	exec _helm "$@"
+fi
