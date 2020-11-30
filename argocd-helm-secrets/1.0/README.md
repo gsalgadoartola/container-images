@@ -1,1 +1,1 @@
-# ArgoCD with helm-secrets Container Image
+# ArgoCD with helm-secrets
